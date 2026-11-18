@@ -1,0 +1,143 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum ReservationStatus {
+  PENDING
+  CONFIRMED
+  CANCELLED
+  EXPIRED
+}
+
+enum PaymentStatus {
+  PENDING
+  PAID
+  FAILED
+  REFUNDED
+}
+
+model User {
+  id           String        @id @default(cuid())
+  email        String        @unique
+  passwordHash String
+  role         Role          @default(USER)
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  reservations Reservation[]
+}
+
+model Theater {
+  id          String       @id @default(cuid())
+  name        String
+  city        String
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  auditoriums Auditorium[]
+}
+
+model Auditorium {
+  id        String     @id @default(cuid())
+  theaterId String
+  name      String
+  theater   Theater    @relation(fields: [theaterId], references: [id], onDelete: Cascade)
+  seats     Seat[]
+  showtimes Showtime[]
+
+  @@unique([theaterId, name])
+}
+
+model Seat {
+  id           String     @id @default(cuid())
+  auditoriumId String
+  row          String
+  number       Int
+  auditorium   Auditorium @relation(fields: [auditoriumId], references: [id], onDelete: Cascade)
+  tickets      Ticket[]
+
+  // Tidak boleh ada dua kursi dengan baris+nomor sama di satu studio
+  @@unique([auditoriumId, row, number])
+}
+
+model Genre {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  movies Movie[]
+}
+
+model Movie {
+  id              String     @id @default(cuid())
+  title           String
+  description     String?
+  durationMinutes Int
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  genres          Genre[]
+  showtimes       Showtime[]
+}
+
+model Showtime {
+  id           String        @id @default(cuid())
+  movieId      String
+  auditoriumId String
+  startsAt     DateTime
+  price        Int
+  createdAt    DateTime      @default(now())
+  movie        Movie         @relation(fields: [movieId], references: [id])
+  auditorium   Auditorium    @relation(fields: [auditoriumId], references: [id])
+  reservations Reservation[]
+  tickets      Ticket[]
+
+  @@index([movieId])
+  @@index([auditoriumId, startsAt])
+}
+
+model Reservation {
+  id         String            @id @default(cuid())
+  userId     String
+  showtimeId String
+  status     ReservationStatus @default(PENDING)
+  expiresAt  DateTime
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
+  user       User              @relation(fields: [userId], references: [id])
+  showtime   Showtime          @relation(fields: [showtimeId], references: [id])
+  tickets    Ticket[]
+  payment    Payment?
+
+  @@index([userId])
+  @@index([status, expiresAt])
+}
+
+model Ticket {
+  id            String      @id @default(cuid())
+  reservationId String
+  showtimeId    String
+  seatId        String
+  price         Int // harga saat dibeli (snapshot)
+  reservation   Reservation @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+  showtime      Showtime    @relation(fields: [showtimeId], references: [id])
+  seat          Seat        @relation(fields: [seatId], references: [id])
+
+  // INTI ANTI DOUBLE BOOKING: satu kursi di satu jadwal hanya boleh punya satu tiket
+  @@unique([showtimeId, seatId])
+}
+
+model Payment {
+  id                    String        @id @default(cuid())
+  reservationId         String        @unique
+  stripeSessionId       String        @unique
+  stripePaymentIntentId String?
+  status                PaymentStatus @default(PENDING)
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
+  reservation           Reservation   @relation(fields: [reservationId], references: [id], onDelete: Cascade)
+}
