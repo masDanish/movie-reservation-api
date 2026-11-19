@@ -6,8 +6,6 @@ import {
   handleCheckoutExpired,
 } from "@/src/modules/payments/payments.service";
 
-export const runtime = "nodejs";
-
 export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature");
   const secret = process.env.STRIPE_WEBHOOK_SECRET;
